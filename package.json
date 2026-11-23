@@ -1,0 +1,68 @@
+{
+  "name": "hoangtuoi-reup",
+  "productName": "HoangTuoi Reup",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "description": "Open-source local-first desktop application for media reup workflows.",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev:renderer": "vite",
+    "dev": "node scripts/dev.cjs",
+    "build:renderer": "vite build",
+    "build:backend": "python backend/build_backend.py",
+    "build": "npm run typecheck && npm run build:renderer",
+    "test:backend": "python -m pytest backend/tests -v",
+    "start:electron": "electron .",
+    "start": "npm run build && electron .",
+    "dist:win": "npm run build:backend && npm run build && electron-builder --win nsis portable"
+  },
+  "build": {
+    "appId": "com.hoangtuoi.reup",
+    "productName": "HoangTuoi Reup",
+    "executableName": "HoangTuoi-Reup",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "HoangTuoi-Reup-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "HoangTuoi-Reup-${version}-Portable.exe"
+    }
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.1.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+data/
+backend/build/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.log
+*.exe
+*.asar
+.env
