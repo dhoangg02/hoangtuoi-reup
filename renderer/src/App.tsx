@@ -19,7 +19,7 @@ const AppRoutes: React.FC = () => {
   if (isLoading) {
     return (
       <div style={{ padding: 32, color: 'var(--muted)' }}>
-        Bootstrapping Local Standalone Workspace...
+        Đang khởi động HoangTuoi Reup (Local Standalone)...
       </div>
     );
   }
@@ -28,12 +28,13 @@ const AppRoutes: React.FC = () => {
     <HashRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/" element={<WorkspacePage />} />
+          <Route path="/" element={<JobsPage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/series" element={<SeriesPage />} />
           <Route path="/watermarks" element={<WatermarksPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/health" element={<HealthPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

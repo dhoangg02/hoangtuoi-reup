@@ -34,11 +34,37 @@ function resolveDataDir() {
 
 const DATA_DIR = resolveDataDir();
 const WORKSPACE_FILE = path.join(DATA_DIR, 'local-workspace.json');
-const BACKEND_SRC_DIR = path.join(PROJECT_ROOT, 'backend');
+
+function resolveBackendSrcDir() {
+  const direct = path.join(PROJECT_ROOT, 'backend');
+  if (!__dirname.includes('app.asar') && fs.existsSync(path.join(direct, 'app', 'main.py'))) {
+    return direct;
+  }
+  const exeDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
+  const repoBackend = path.resolve(exeDir, '..', '..', 'backend');
+  if (fs.existsSync(path.join(repoBackend, 'app', 'main.py'))) {
+    return repoBackend;
+  }
+  return direct;
+}
+
+const BACKEND_SRC_DIR = resolveBackendSrcDir();
 
 app.setName('HoangTuoi Reup');
 
 function resolveBackendLaunch() {
+  const pyMain = path.join(BACKEND_SRC_DIR, 'app', 'main.py');
+  if (process.env.HOANGTUOI_USE_BUILT_BACKEND !== '1' && fs.existsSync(pyMain)) {
+    const pyCmd =
+      process.env.HOANGTUOI_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+    return {
+      mode: 'source',
+      cmd: pyCmd,
+      baseArgs: ['-m', 'app.main'],
+      cwd: BACKEND_SRC_DIR,
+      binaryPath: pyMain,
+    };
+  }
   if (app.isPackaged) {
     const exeName =
       process.platform === 'win32' ? 'hoangtuoi-reup-backend.exe' : 'hoangtuoi-reup-backend';

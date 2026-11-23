@@ -21,6 +21,7 @@ def _row_to_job(row: Any) -> dict[str, Any]:
         "stage": row["stage"],
         "progress": row["progress"],
         "options": json.loads(row["options_json"] or "{}"),
+        "studio": json.loads(row["studio_json"] or "{}"),
         "output_path": row["output_path"],
         "error_message": row["error_message"],
         "created_at": row["created_at"],

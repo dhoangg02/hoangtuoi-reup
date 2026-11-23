@@ -11,6 +11,29 @@ export interface HealthResponse {
   [key: string]: unknown;
 }
 
+export interface SubtitleSegment {
+  index: number;
+  start: number;
+  end: number;
+  origin_text: string;
+  vi_text: string;
+}
+
+export interface JobStudioData {
+  job_id?: string;
+  detected_language?: string;
+  target_language?: string;
+  voice_id?: string;
+  voice_rate?: string;
+  bg_volume?: number;
+  burn_subtitles?: boolean;
+  duration?: number;
+  output_path?: string;
+  srt_path?: string;
+  source_video_path?: string;
+  segments?: SubtitleSegment[];
+}
+
 export interface JobSummary {
   id: string;
   title?: string;
@@ -19,10 +42,12 @@ export interface JobSummary {
   progress?: number;
   message?: string;
   error_message?: string;
+  output_path?: string;
   created_at?: string;
   updated_at?: string;
   url?: string;
   options?: Record<string, unknown>;
+  studio?: JobStudioData;
   [key: string]: unknown;
 }
 
@@ -55,7 +80,6 @@ export interface ApiProvider {
   readonly mode: RuntimeModeType;
   readonly baseUrl: string;
 
-  // Local-capable endpoints (FastAPI sidecar on 127.0.0.1)
   getHealth(): Promise<HealthResponse>;
   getStartupStatus(): Promise<Record<string, unknown>>;
   getSettings(): Promise<Record<string, unknown>>;
@@ -63,8 +87,19 @@ export interface ApiProvider {
 
   listJobs(): Promise<JobSummary[]>;
   createJob(payload: { title: string; url?: string; options?: Record<string, unknown> }): Promise<JobSummary>;
+  createDemoJob(options?: Record<string, unknown>): Promise<JobSummary>;
   getJob(id: string): Promise<JobSummary>;
   startJob(id: string): Promise<JobSummary>;
+  redubJob(
+    id: string,
+    payload: {
+      segments?: SubtitleSegment[];
+      voice_id?: string;
+      voice_rate?: string;
+      bg_volume?: number;
+      burn_subtitles?: boolean;
+    }
+  ): Promise<JobSummary>;
   cancelJob(id: string): Promise<JobSummary>;
   deleteJob(id: string): Promise<unknown>;
 
@@ -80,7 +115,6 @@ export interface ApiProvider {
   createWatermark(payload: { name: string; config?: Record<string, unknown> }): Promise<WatermarkProfile>;
   deleteWatermark(id: string): Promise<unknown>;
 
-  // CLOUD_ONLY endpoints (disabled in LOCAL_STANDALONE; never spoofed)
   getCloudAccount(): Promise<never>;
   getBillingBalance(): Promise<never>;
   listFacebookPages(): Promise<never>;
@@ -151,6 +185,13 @@ export class LocalApiProvider implements ApiProvider {
     });
   }
 
+  createDemoJob(options?: Record<string, unknown>): Promise<JobSummary> {
+    return localFetch<JobSummary>(this.baseUrl, '/jobs/demo', {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  }
+
   getJob(id: string): Promise<JobSummary> {
     return localFetch<JobSummary>(this.baseUrl, `/jobs/${encodeURIComponent(id)}`);
   }
@@ -158,6 +199,22 @@ export class LocalApiProvider implements ApiProvider {
   startJob(id: string): Promise<JobSummary> {
     return localFetch<JobSummary>(this.baseUrl, `/jobs/${encodeURIComponent(id)}/start`, {
       method: 'POST',
+    });
+  }
+
+  redubJob(
+    id: string,
+    payload: {
+      segments?: SubtitleSegment[];
+      voice_id?: string;
+      voice_rate?: string;
+      bg_volume?: number;
+      burn_subtitles?: boolean;
+    }
+  ): Promise<JobSummary> {
+    return localFetch<JobSummary>(this.baseUrl, `/jobs/${encodeURIComponent(id)}/redub`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -273,10 +330,16 @@ export class CloudApiProvider implements ApiProvider {
   async createJob(payload: { title: string; url?: string }): Promise<JobSummary> {
     return { id: 'cloud-stub', title: payload.title, url: payload.url };
   }
+  async createDemoJob(): Promise<JobSummary> {
+    return { id: 'cloud-stub' };
+  }
   async getJob(id: string): Promise<JobSummary> {
     return { id };
   }
   async startJob(id: string): Promise<JobSummary> {
+    return { id };
+  }
+  async redubJob(id: string): Promise<JobSummary> {
     return { id };
   }
   async cancelJob(id: string): Promise<JobSummary> {

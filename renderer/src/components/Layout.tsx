@@ -12,12 +12,12 @@ import {
 import { useLocalWorkspace } from '../context/LocalWorkspaceContext';
 
 const navItems = [
-  { to: '/', label: 'Local Workspace', icon: Home, end: true },
-  { to: '/jobs', label: 'Jobs', icon: Film },
-  { to: '/channels', label: 'Channels', icon: FolderKanban },
-  { to: '/series', label: 'Series', icon: Layers },
-  { to: '/watermarks', label: 'Watermarks', icon: Stamp },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/', label: 'Dịch & Lồng Tiếng', icon: Film, end: true },
+  { to: '/channels', label: 'Kênh Nguồn (Channels)', icon: FolderKanban },
+  { to: '/series', label: 'Series Phim', icon: Layers },
+  { to: '/watermarks', label: 'Đóng Dấu (Watermarks)', icon: Stamp },
+  { to: '/settings', label: 'Cài Đặt (Settings)', icon: Settings },
+  { to: '/workspace', label: 'Local Workspace', icon: Home },
   { to: '/health', label: 'Sidecar Health', icon: Activity },
 ];
 

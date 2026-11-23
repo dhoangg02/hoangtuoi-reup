@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 
 from app.core.config import get_config
 from app.models.schemas import (
@@ -19,7 +21,7 @@ from app.repositories.store import (
     WatermarkRepository,
 )
 from app.utils.media import check_dir_status, detect_binary
-from app.workers.job_worker import job_worker, ws_manager
+from app.workers.job_worker import AVAILABLE_VOICES, job_worker, ws_manager
 
 router = APIRouter(prefix="/api/v1")
 
@@ -46,6 +48,7 @@ def get_health() -> dict[str, Any]:
         "degraded_reasons": degraded,
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
+        "voices": AVAILABLE_VOICES,
         "paths": {
             "data_dir": check_dir_status(cfg.data_dir),
             "job_storage_dir": check_dir_status(cfg.job_storage_dir),
@@ -61,6 +64,11 @@ def get_startup_status() -> dict[str, Any]:
     return {"ready": True, "runtime_mode": "LOCAL_STANDALONE", "downloads": []}
 
 
+@router.get("/voices")
+def list_voices() -> list[dict[str, Any]]:
+    return AVAILABLE_VOICES
+
+
 # --- Jobs ---
 @router.get("/jobs")
 def list_jobs() -> list[dict[str, Any]]:
@@ -70,6 +78,27 @@ def list_jobs() -> list[dict[str, Any]]:
 @router.post("/jobs", status_code=201)
 def create_job(payload: JobCreate) -> dict[str, Any]:
     return job_repo.create(payload.title, payload.url, payload.options)
+
+
+@router.post("/jobs/demo", status_code=201)
+async def create_and_start_demo_job(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    body = payload or {}
+    options = {
+        "source_lang": "zh",
+        "target_lang": "vi",
+        "voice_id": body.get("voice_id", "vi-VN-HoaiMyNeural"),
+        "voice_rate": body.get("voice_rate", "+10%"),
+        "bg_volume": float(body.get("bg_volume", 0.15)),
+        "whisper_model": body.get("whisper_model", "base"),
+        "burn_subtitles": bool(body.get("burn_subtitles", True)),
+    }
+    job = job_repo.create(
+        title="Demo Dịch & Lồng Tiếng Video Trung → Việt",
+        url="demo",
+        options=options,
+    )
+    started = await job_worker.enqueue(job["id"])
+    return started or job
 
 
 @router.get("/jobs/{job_id}")
@@ -100,7 +129,30 @@ def delete_job(job_id: str) -> dict[str, Any]:
 @router.post("/jobs/{job_id}/start")
 @router.post("/jobs/{job_id}/retry")
 async def start_job(job_id: str) -> dict[str, Any]:
-    updated = await job_worker.enqueue(job_id)
+    updated = await job_worker.enqueue(job_id, redub_only=False)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return updated
+
+
+@router.post("/jobs/{job_id}/redub")
+async def redub_job(job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    job = job_repo.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    body = payload or {}
+    studio = job_repo.get_studio(job_id) or {}
+    if "segments" in body and isinstance(body["segments"], list):
+        studio["segments"] = body["segments"]
+        job_repo.put_studio(job_id, studio)
+
+    options = dict(job.get("options") or {})
+    for key in ("voice_id", "voice_rate", "bg_volume", "burn_subtitles"):
+        if key in body:
+            options[key] = body[key]
+    job_repo.update(job_id, options=options)
+
+    updated = await job_worker.enqueue(job_id, redub_only=True)
     if not updated:
         raise HTTPException(status_code=404, detail="Job not found")
     return updated
@@ -128,6 +180,40 @@ def put_studio(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     if studio is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return studio
+
+
+@router.get("/jobs/{job_id}/video")
+def stream_output_video(job_id: str) -> FileResponse:
+    job = job_repo.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    out_path = Path(job.get("output_path") or "")
+    if not out_path.is_file():
+        cfg = get_config()
+        out_path = cfg.output_dir / f"{job_id}_vi_dubbed.mp4"
+    if not out_path.is_file():
+        raise HTTPException(status_code=404, detail="Output video not ready")
+    return FileResponse(path=str(out_path), media_type="video/mp4", filename=out_path.name)
+
+
+@router.get("/jobs/{job_id}/source-video")
+def stream_source_video(job_id: str) -> FileResponse:
+    cfg = get_config()
+    src_path = cfg.job_storage_dir / job_id / "source.mp4"
+    if not src_path.is_file():
+        raise HTTPException(status_code=404, detail="Source video not found")
+    return FileResponse(path=str(src_path), media_type="video/mp4", filename=f"{job_id}_source.mp4")
+
+
+@router.get("/jobs/{job_id}/srt")
+def download_srt(job_id: str) -> FileResponse:
+    cfg = get_config()
+    srt_path = cfg.output_dir / f"{job_id}_vi.srt"
+    if not srt_path.is_file():
+        srt_path = cfg.job_storage_dir / job_id / "vi.srt"
+    if not srt_path.is_file():
+        raise HTTPException(status_code=404, detail="SRT file not found")
+    return FileResponse(path=str(srt_path), media_type="text/plain; charset=utf-8", filename=f"{job_id}_vi.srt")
 
 
 # --- Channels ---
