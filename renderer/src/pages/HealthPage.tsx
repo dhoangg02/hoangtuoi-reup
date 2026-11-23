@@ -10,7 +10,8 @@ export const HealthPage: React.FC = () => {
     queryKey: ['local-health', apiProvider.baseUrl],
     queryFn: () => apiProvider.getHealth(),
     enabled: Boolean(apiProvider.baseUrl),
-    retry: false,
+    retry: 6,
+    retryDelay: 400,
   });
 
   const handleRestart = async () => {

@@ -9,7 +9,30 @@ const { spawn } = require('node:child_process');
 
 const RUNTIME_MODE = process.env.HOANGTUOI_RUNTIME_MODE || 'LOCAL_STANDALONE';
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DATA_DIR = path.resolve(process.env.HOANGTUOI_DATA_DIR || path.join(PROJECT_ROOT, 'data'));
+
+function resolveDataDir() {
+  if (process.env.HOANGTUOI_DATA_DIR) {
+    return path.resolve(process.env.HOANGTUOI_DATA_DIR);
+  }
+  const isInsideAsar = __dirname.includes('app.asar') || app.isPackaged;
+  if (!isInsideAsar) {
+    return path.join(PROJECT_ROOT, 'data');
+  }
+  const exeDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
+  const repoRootCandidate = path.resolve(exeDir, '..', '..');
+  if (fs.existsSync(path.join(repoRootCandidate, 'package.json'))) {
+    return path.join(repoRootCandidate, 'data');
+  }
+  try {
+    const candidate = path.join(exeDir, 'data');
+    fs.mkdirSync(candidate, { recursive: true });
+    return candidate;
+  } catch {
+    return path.join(app.getPath('userData'), 'data');
+  }
+}
+
+const DATA_DIR = resolveDataDir();
 const WORKSPACE_FILE = path.join(DATA_DIR, 'local-workspace.json');
 const BACKEND_SRC_DIR = path.join(PROJECT_ROOT, 'backend');
 
@@ -196,7 +219,6 @@ async function startSidecar() {
     sidecarProcess.on('exit', () => {
       sidecarProcess = null;
     });
-    await waitForHealth(sidecarUrl, 4500);
   } catch (err) {
     console.error('[LocalEdition] Failed to spawn open-source backend:', err);
     sidecarProcess = null;
