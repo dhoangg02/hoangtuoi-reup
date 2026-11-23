@@ -42,29 +42,67 @@ ws_manager = ConnectionManager()
 AVAILABLE_VOICES = [
     {
         "id": "vi-VN-HoaiMyNeural",
-        "name": "Hoài My (Nữ - Review / TikTok Tự Nhiên)",
+        "name": "Hoài My — Nữ Review Phim / TikTok Tự Nhiên",
+        "base_voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+0Hz",
+        "default_rate": "+10%",
         "gender": "Female",
         "lang": "vi-VN",
+        "sample_text": "Chào mừng các bạn đến với kênh review phim. Hôm nay chúng ta cùng theo dõi một bộ phim cực kỳ hấp dẫn.",
     },
     {
         "id": "vi-VN-NamMinhNeural",
-        "name": "Nam Minh (Nam - Thuyết Minh Trầm Ấm)",
+        "name": "Nam Minh — Nam Thuyết Minh Điện Ảnh Trầm Ấm",
+        "base_voice": "vi-VN-NamMinhNeural",
+        "pitch": "+0Hz",
+        "default_rate": "+10%",
         "gender": "Male",
         "lang": "vi-VN",
+        "sample_text": "Trong thế giới võ hiệp rộng lớn, không ai biết trước được kết cục của cuộc đối đầu định mệnh này.",
     },
     {
-        "id": "en-US-AriaNeural",
-        "name": "Aria (English Female)",
+        "id": "vi-hoaimy-story",
+        "name": "Ngọc Lan — Nữ Kể Chuyện / Tâm Sự Truyền Cảm",
+        "base_voice": "vi-VN-HoaiMyNeural",
+        "pitch": "-10Hz",
+        "default_rate": "+0%",
         "gender": "Female",
-        "lang": "en-US",
+        "lang": "vi-VN",
+        "sample_text": "Đôi khi trong cuộc sống, những điều bình dị nhất lại là những ký ức khiến ta nhớ mãi không quên.",
     },
     {
-        "id": "en-US-GuyNeural",
-        "name": "Guy (English Male)",
+        "id": "vi-namminh-deep",
+        "name": "Hùng Dũng — Nam Trầm Lịch Sử / Kiếm Hiệp",
+        "base_voice": "vi-VN-NamMinhNeural",
+        "pitch": "-16Hz",
+        "default_rate": "+5%",
         "gender": "Male",
-        "lang": "en-US",
+        "lang": "vi-VN",
+        "sample_text": "Trận chiến năm ấy đã làm thay đổi hoàn toàn cục diện của cả một triều đại phong kiến.",
+    },
+    {
+        "id": "vi-hoaimy-anime",
+        "name": "Tiểu Vy — Nữ Trẻ Trung / Hoạt Hình & Hài Hước",
+        "base_voice": "vi-VN-HoaiMyNeural",
+        "pitch": "+22Hz",
+        "default_rate": "+15%",
+        "gender": "Female",
+        "lang": "vi-VN",
+        "sample_text": "Trời ơi tin được không, nhân vật chính lại vừa mở khóa được một kỹ năng siêu cấp bá đạo luôn!",
+    },
+    {
+        "id": "vi-namminh-news",
+        "name": "Minh Quân — Nam Tin Tức / Tóm Tắt Nhanh",
+        "base_voice": "vi-VN-NamMinhNeural",
+        "pitch": "+6Hz",
+        "default_rate": "+18%",
+        "gender": "Male",
+        "lang": "vi-VN",
+        "sample_text": "Chỉ trong vòng ba phút, toàn bộ diễn biến quan trọng nhất của tập phim sẽ được tóm tắt ngay sau đây.",
     },
 ]
+
+VOICE_PROFILE_MAP: dict[str, dict[str, Any]] = {v["id"]: v for v in AVAILABLE_VOICES}
 
 _WHISPER_CACHE: dict[str, Any] = {}
 
@@ -183,11 +221,16 @@ async def _synthesize_tts_mp3(text: str, voice_id: str, rate: str, dest_mp3: Pat
     if not clean_text:
         clean_text = "..."
 
-    # 1. Try Microsoft Edge Neural TTS first
+    profile = VOICE_PROFILE_MAP.get(voice_id)
+    base_voice = profile["base_voice"] if profile else voice_id
+    pitch = profile["pitch"] if profile else "+0Hz"
+    norm_rate = rate if rate and rate.startswith(("+", "-")) else "+0%"
+
+    # 1. Primary: Microsoft Edge Neural TTS (edge-tts >= 7.3.1)
     try:
         import edge_tts
 
-        comm = edge_tts.Communicate(clean_text, voice=voice_id, rate=rate)
+        comm = edge_tts.Communicate(clean_text, voice=base_voice, rate=norm_rate, pitch=pitch)
         await comm.save(str(dest_mp3))
         if dest_mp3.exists() and dest_mp3.stat().st_size > 200:
             return dest_mp3

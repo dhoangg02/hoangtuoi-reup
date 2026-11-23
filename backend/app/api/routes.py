@@ -21,7 +21,14 @@ from app.repositories.store import (
     WatermarkRepository,
 )
 from app.utils.media import check_dir_status, detect_binary
-from app.workers.job_worker import AVAILABLE_VOICES, job_worker, ws_manager
+from app.workers.job_worker import (
+    AVAILABLE_VOICES,
+    VOICE_PROFILE_MAP,
+    _get_whisper_model,
+    _synthesize_tts_mp3,
+    job_worker,
+    ws_manager,
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -61,12 +68,132 @@ def get_health() -> dict[str, Any]:
 
 @router.get("/startup/status")
 def get_startup_status() -> dict[str, Any]:
-    return {"ready": True, "runtime_mode": "LOCAL_STANDALONE", "downloads": []}
+    return get_resources_status()
+
+
+@router.get("/resources")
+def get_resources_status() -> dict[str, Any]:
+    import asyncio
+    import importlib.metadata
+
+    ffmpeg = detect_binary("ffmpeg")
+    ffprobe = detect_binary("ffprobe")
+    yt_dlp_bin = detect_binary("yt-dlp")
+
+    def _pkg_ver(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except Exception:
+            return None
+
+    edge_ver = _pkg_ver("edge-tts")
+    whisper_ver = _pkg_ver("faster-whisper")
+    ytdlp_ver = _pkg_ver("yt-dlp")
+
+    items = [
+        {
+            "id": "ffmpeg",
+            "name": "FFmpeg & FFprobe Media Engine",
+            "category": "binary",
+            "installed": bool(ffmpeg["available"] and ffprobe["available"]),
+            "version": ffmpeg.get("path") or "missing",
+            "description": "Tách nhạc/thoại, trộn âm thanh lồng tiếng và đóng phụ đề MP4",
+        },
+        {
+            "id": "yt-dlp",
+            "name": "yt-dlp Video Downloader (Douyin / TikTok / YouTube)",
+            "category": "python",
+            "installed": bool(ytdlp_ver or yt_dlp_bin["available"]),
+            "version": ytdlp_ver or yt_dlp_bin.get("path") or "missing",
+            "description": "Tải video nguồn chất lượng gốc từ link chia sẻ",
+        },
+        {
+            "id": "faster-whisper",
+            "name": "Faster-Whisper AI Speech-to-Text (Offline ASR)",
+            "category": "ai_model",
+            "installed": bool(whisper_ver),
+            "version": f"v{whisper_ver} (Models: tiny / base / small)" if whisper_ver else "missing",
+            "description": "Mô hình AI nhận diện lời thoại đa ngôn ngữ kèm mốc thời gian",
+        },
+        {
+            "id": "edge-tts",
+            "name": f"Neural Vietnamese TTS Voices ({len(AVAILABLE_VOICES)} Giọng AI)",
+            "category": "ai_voice",
+            "installed": bool(edge_ver),
+            "version": f"v{edge_ver}" if edge_ver else "missing",
+            "description": "Bộ 6 giọng đọc AI Neural Tiếng Việt (Hoài My, Nam Minh, Ngọc Lan, Hùng Dũng, Tiểu Vy, Minh Quân)",
+        },
+    ]
+    all_ready = all(item["installed"] for item in items)
+    return {
+        "ready": all_ready,
+        "runtime_mode": "LOCAL_STANDALONE",
+        "resources": items,
+        "voices": AVAILABLE_VOICES,
+        "downloads": [],
+    }
+
+
+@router.post("/resources/install")
+async def install_or_update_resources(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    import asyncio
+    import subprocess
+    import sys
+
+    body = payload or {}
+    whisper_model = str(body.get("whisper_model") or "base")
+
+    def _run_install() -> list[str]:
+        logs: list[str] = []
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "edge-tts>=7.3.1",
+                "yt-dlp",
+                "faster-whisper",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        logs.append(f"pip upgrade exit={proc.returncode}")
+        # Pre-load & cache Faster-Whisper model weights locally
+        _get_whisper_model(whisper_model)
+        logs.append(f"faster-whisper model '{whisper_model}' cached")
+        return logs
+
+    logs = await asyncio.to_thread(_run_install)
+    status = get_resources_status()
+    status["install_logs"] = logs
+    return status
 
 
 @router.get("/voices")
 def list_voices() -> list[dict[str, Any]]:
     return AVAILABLE_VOICES
+
+
+@router.get("/voices/preview")
+async def preview_voice(voice_id: str = "vi-VN-HoaiMyNeural", rate: str = "+10%", text: str = "") -> FileResponse:
+    import hashlib
+
+    cfg = get_config()
+    preview_dir = cfg.cache_dir / "voice_previews"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+
+    profile = VOICE_PROFILE_MAP.get(voice_id, AVAILABLE_VOICES[0])
+    sample_text = (text or "").strip() or str(profile.get("sample_text") or "Xin chào các bạn.")
+    digest = hashlib.sha1(f"{voice_id}|{rate}|{sample_text}".encode("utf-8")).hexdigest()[:12]
+    mp3_path = preview_dir / f"preview_{voice_id}_{digest}.mp3"
+
+    if not mp3_path.exists() or mp3_path.stat().st_size < 200:
+        await _synthesize_tts_mp3(sample_text, voice_id=voice_id, rate=rate, dest_mp3=mp3_path)
+
+    return FileResponse(path=str(mp3_path), media_type="audio/mpeg", filename=mp3_path.name)
 
 
 # --- Jobs ---

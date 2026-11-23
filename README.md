@@ -48,17 +48,25 @@ Pre-built Windows **NSIS Installer** (`HoangTuoi-Reup-Setup-*.exe`) and **Portab
 
 ---
 
-## Development Setup
+## Development & Local Resource Setup
+
+Khi tải mã nguồn về máy mới, chạy trực tiếp **`Install-Resources.cmd`** (hoặc bấm nút **"Đồng bộ Tài nguyên & Giọng AI"** ngay trên thanh công cụ trong ứng dụng) để tự động cài đặt toàn bộ tài nguyên cần thiết (`Node modules`, `Faster-Whisper AI ASR`, `Edge-TTS >= 7.3.1` với 6 giọng đọc Neural Tiếng Việt, `yt-dlp`, và `FFmpeg`):
 
 ```powershell
 git clone https://github.com/dhoangg02/hoangtuoi-reup.git
 cd hoangtuoi-reup
+.\Install-Resources.cmd
+```
+
+Hoặc cài thủ công từ terminal:
+
+```powershell
 npm ci
-python -m pip install -r backend/requirements.txt
+python -m pip install --upgrade -r backend/requirements.txt
 npm run dev
 ```
 
-Hoặc trên Windows có thể nhấp đúp trực tiếp vào `Start-HoangTuoi-Reup.cmd` để mở nhanh ứng dụng.
+Sau khi cài xong, nhấp đúp trực tiếp vào **`Start-HoangTuoi-Reup.cmd`** để mở nhanh ứng dụng (`Launch application → Local Workspace`, không cần đăng nhập). Chi tiết kiến trúc tách biệt Authentication xem tại [LOCAL_DEPENDENCY_MAP.md](./LOCAL_DEPENDENCY_MAP.md).
 
 ## Build from Source
 
