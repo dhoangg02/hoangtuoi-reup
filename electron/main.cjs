@@ -287,8 +287,14 @@ async function createMainWindow() {
   }
 
   if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(true);
     mainWindow.show();
     mainWindow.focus();
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnTop(false);
+      }
+    }, 800);
   }
 
   mainWindow.on('closed', () => {
